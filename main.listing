@@ -1,0 +1,36 @@
+def steering_vector(model, D_ref, D_f):
+    # mean MLP output over the refusal prompts
+    mu_ref = mlp_outputs(model, D_ref).mean(0)
+    # mean MLP output over the forget samples
+    mu_f = mlp_outputs(model, D_f).mean(0)
+    # direction from forget to refusal (Eq. 2)
+    return mu_ref - mu_f
+
+
+def stamp(model, D_f, D_r, D_ref, lam=1e-4):
+    # steering vector at the target layer
+    r_sv = steering_vector(model, D_ref, D_f)
+    # stack intermediates H (n x m) and MLP outputs O (n x d)
+    H, O = collect_activations(model, D_f + D_r + D_ref, layer=6)
+    # redirect the forget rows toward the refusal subspace
+    O[rows_of(D_f)] += r_sv
+    # regularized pseudoinverse solve (Eqs. 6-7), O(m^3)
+    W_new = inv(H.T @ H + lam * eye(m)) @ H.T @ O
+    # overwrite the down-projection of layer 6
+    set_down_proj(model, W_new)
+
+
+def stamp_lr(model, D_f, D_r, D_ref, r=64):
+    # steering vector and activations, as in STAMP
+    r_sv = steering_vector(model, D_ref, D_f)
+    H, O = collect_activations(model, D_f + D_r + D_ref, layer=6)
+    O[rows_of(D_f)] += r_sv
+    # sketch H ~ A B with a random row-orthonormal B
+    B = qr(randn(r, m))
+    A = H @ B.T
+    # pseudoinverses of the two small factors (Eq. 8)
+    A_plus = inv(A.T @ A) @ A.T
+    B_plus = B.T @ inv(B @ B.T)
+    # low-rank update (Eq. 9), O(r^3 + r^2 m)
+    W_new = B_plus @ (A_plus @ O)
+    set_down_proj(model, W_new)
