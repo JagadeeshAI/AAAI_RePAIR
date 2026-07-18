@@ -27,6 +27,7 @@
 
 # Generated PDFs (keep tracked ones explicitly if needed)
 main.pdf
+sup.pdf
 
 # Editor / OS junk
 *.swp

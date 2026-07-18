@@ -6,7 +6,6 @@ def steering_vector(model, D_ref, D_f):
     # direction from forget to refusal (Eq. 2)
     return mu_ref - mu_f
 
-
 def stamp(model, D_f, D_r, D_ref, lam=1e-4):
     # steering vector at the target layer
     r_sv = steering_vector(model, D_ref, D_f)
@@ -18,7 +17,6 @@ def stamp(model, D_f, D_r, D_ref, lam=1e-4):
     W_new = inv(H.T @ H + lam * eye(m)) @ H.T @ O
     # overwrite the down-projection of layer 6
     set_down_proj(model, W_new)
-
 
 def stamp_lr(model, D_f, D_r, D_ref, r=64):
     # steering vector and activations, as in STAMP
