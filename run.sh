@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-	echo "Usage: ./run [pull|push \"commit message\"]"
+	echo "Usage: ./run.sh [pull|push \"commit message\"]"
 	exit 1
 }
 
@@ -16,6 +16,7 @@ case "$1" in
 		msg="${2:-Update}"
 		git add -A
 		git commit -m "$msg" || echo "Nothing to commit."
+		git pull --rebase
 		git push
 		;;
 	*)
