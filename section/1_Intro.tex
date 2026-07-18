@@ -1,0 +1,39 @@
+\section{Introduction}
+
+Large language models (LLMs) achieve extraordinary capabilities across reasoning, summarization, multilingual understanding, and autonomous code generation~\cite{kumar2024large,huang2023look,chen2025putting,li2024can,kaplan2020scaling}. Yet every deployed model carries an uncomfortable inheritance. Pretraining on web-scale corpora~\cite{crawford2021excavating} absorbs harmful knowledge, private biographical data, and persistent misinformation~\cite{zhang2025enj,yi2025safer,wang2025comprehensive} indiscriminately into model weights, with no native mechanism to remove them selectively~\cite{yao2024large, li2024wmdp}. As LLMs penetrate high-stakes personal, medical, and legal contexts, this inability to forget poses concrete privacy and safety risks. Machine unlearning (MU) aims to excise the influence of targeted data from model weights without the prohibitive cost of full retraining~\cite{zhang2024negative, wang2024llm, wang2025rethinking}.
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.90\linewidth]{images/interactive-Page-1.drawio.png}
+    \caption{Motivating example for Interactive Machine Unlearning (IMU). \textit{Left:} Without IMU, the model retains personal data across sessions despite the user's request to unlearn. \textit{Right:} With IMU, the model autonomously removes the personal data and produces a refusal response in subsequent interactions.}
+    \label{fig:imu_motivation}
+\end{figure}
+A growing body of work pursues this direction, producing GA~\cite{yao2024large}, NPO~\cite{zhang2024negative}, RMU~\cite{li2024wmdp}, FLAT~\cite{wang2024llm}, WGA~\cite{wang2025rethinking}, and ASU~\cite{zade2026attention}, each demonstrating measurable knowledge removal. Yet all share a structural limitation. Built for practitioners with deep access to model internals, they require curated retain datasets and full training pipelines, entirely excluding the end users whose data is at stake.
+
+This exclusion is not a usability gap but a governance failure. A user who discovers that a model has memorized their private data must either petition a model service provider (MSP) and trust that removal is faithfully carried out, or write complex unlearning scripts against an unfamiliar architecture. Neither is realistic, and the former offers no guarantee of faithful removal. Privacy regulations such as the GDPR~\cite{protection2018general} and the CCPA~\cite{bonta2022california} enshrine the right to erasure, yet no existing framework enables users to exercise it directly and autonomously.
+
+Closing this gap requires reformulating unlearning for the inference-time setting, where the request originates from the user rather than the provider. We therefore introduce \textit{\textbf{I}nteractive \textbf{M}achine \textbf{U}nlearning} \textbf{(IMU)}, in which users instruct an LLM to forget targeted knowledge through natural language during inference, without an intermediary (Figure~\ref{fig:imu_motivation}). IMU retains the standard unlearning objective under two constraints that no existing method satisfies simultaneously. It must be \textit{training-free}, as inference environments lack training capabilities, and support \textit{single-sample} forgetting, since requests arrive one at a time. These constraints, rather than the interaction modality, make IMU distinct, and Table~\ref{tab:single_sample} shows every existing method collapses under them.
+
+\begin{figure}
+\centering
+\includegraphics[width=0.95\linewidth]{images/interactive-Page-2.drawio.png}
+\caption{Conceptual illustration of RePAIR.
+$\mathcal{M}_{\mathrm{\textbf{\textit{surgeon}}}}$ repairs
+$\mathcal{M}_{\mathrm{\textbf{\textit{patient}}}}$
+(\textit{left}) using STAMP, transforming it into
+$\mathcal{M}_{\mathrm{\textbf{\textit{healed}}}}$
+(\textit{right}).}
+\label{fig:REPAIR_block}
+\end{figure}
+
+To address IMU, we propose Interactive Machine Unlearning through Prompt-Aware Model Repair (\textbf{RePAIR}) (Figure~\ref{fig:REPAIR_block}), comprising $\mathcal{M}_{\mathrm{\textit{patient}}}$ as the base model, $\mathcal{M}_{\mathrm{\textit{watchdog}}}$ for intent detection and forget-pair extraction, and $\mathcal{M}_{\mathrm{\textit{surgeon}}}$ for repair code generation. At its core, \textbf{S}teering \textbf{T}hrough \textbf{A}ctivation \textbf{M}anipulation with \textbf{P}seudoInverse (\textbf{STAMP}) redirects the forget sample's MLP activations toward a refusal subspace via closed-form pseudoinverse updates, without any gradient computation. Its low-rank variant, STAMP-LR, reduces cost from $\mathcal{O}(m^3)$ to $\mathcal{O}(r^3 + r^2 \cdot m)$, where $m$ is the feed-forward width, achieving ${\sim}3\times$ speedup with an update footprint under 4\,MB, light enough for on-device deployment.
+
+Our main contributions are as follows.
+\begin{enumerate}
+    \item We formalize \textit{Interactive Machine Unlearning} (IMU), an inference-time setting in which the forget request originates from the end user rather than the provider, under \textit{training-free} and \textit{single-sample} constraints that no existing method meets.
+
+    \item We propose STAMP and STAMP-LR, the first training-free, single-sample unlearning methods for LLMs operating entirely at test time.
+
+    \item We introduce RePAIR, an end-to-end solution for IMU integrating intent detection, code generation, and autonomous model repair.
+
+    \item Comprehensive experiments across three tasks validate near-oracle forgetting with preserved utility, outperforming six state-of-the-art (SoTA) baselines.
+\end{enumerate}

@@ -1,0 +1,215 @@
+% =====================================================================
+% Supplementary material for
+%   RePAIR: Interactive Machine Unlearning through Prompt-Aware Model Repair
+% Content moved VERBATIM from the main paper: Limitations, choice of
+% intervention layer, rank analysis. Compiled standalone via main/sup.tex.
+% Only cross-document \ref's were replaced with fixed numbers, marked %XREF.
+% =====================================================================
+
+\noindent This supplementary material accompanies the main paper and is organized as follows. Section~\ref{sup:limitations} presents the extended discussion of limitations. Section~\ref{sup:ablations} reports two additional ablation studies: the choice of the intervention layer (\ref{sup:layer}) and the rank of STAMP-LR (\ref{sup:rank}). Section~\ref{sup:rq3} traces the pipeline end to end and evaluates robustness to query reformulation. Section~\ref{sup:code} provides code snippets for STAMP and STAMP-LR. All experimental settings match those of the main paper unless stated otherwise.
+
+\section{Limitations}
+\label{sup:limitations}
+Despite its effectiveness, RePAIR has several limitations.
+
+\noindent
+\textbf{Scope of the single-sample claim.} \textit{Single-sample} refers to the size of the forget set, $|\mathcal{D}_f| = 1$. Existing LLM unlearning methods need a batch of forget examples and fail at this granularity (Table~5 of the main paper), whereas STAMP removes a target from one. It does not mean that no other data is used, since the retain buffer and the shared reference set $\mathcal{D}_{\textit{ref}}$ of 200 refusal prompts, which is fixed across all requests, are still required. %XREF was Table~\ref{tab:single_sample}
+
+\noindent
+\textbf{Retain data at inference time.} All reported results use a retain buffer of 10\% of the full retain set, which Table~4 of the main paper shows is sufficient, but STAMP still requires a replay buffer $\mathcal{D}_r$. This dependence is not specific to STAMP, as every baseline we compare against also relies on retain data, and retain-free unlearning is an emerging direction rather than a solved one. FLAT~\cite{wang2024llm} is the notable exception, operating on $\mathcal{D}_f$ alone through a regularizer. Storing the buffer on an edge device sits uneasily with the GDPR and CCPA motivation on which the framework rests, since the user must keep a slice of the data the system is meant to remove. %XREF was Table~\ref{tab:retain_ratio}
+
+\noindent
+\textbf{Three models rather than one.} RePAIR assigns intent detection, repair-code generation, and the edit itself to three separate models. This reflects the open-weight models available to us rather than a requirement of the method, since no single open model we tested was at once a reliable intent classifier and a competent code generator. A model strong in both general reasoning and code would subsume all three roles, allowing $\mathcal{M}_{\textit{watchdog}}$ and $\mathcal{M}_{\textit{surgeon}}$ to be dropped and leaving a single model that repairs itself.
+
+\noindent
+\textbf{Resource constraints at test time.} As shown in Table~2 of the main paper, training-based methods require significantly more GPU memory than is typically available at inference. The STAMP-LR update itself is light, needing under $4$\,MB of workspace and no gradients, so the repair runs on device. The remaining cost is the surrounding pipeline, which currently keeps $\mathcal{M}_{\textit{watchdog}}$ and $\mathcal{M}_{\textit{surgeon}}$ resident alongside $\mathcal{M}_{\textit{patient}}$. Collapsing these into a single capable model, as discussed above, or serving them remotely, leaves only $\mathcal{M}_{\textit{patient}}$ in memory and brings the full framework within an on-device budget. %XREF was Table~\ref{tab:cost_comparison}
+
+\noindent
+\textbf{Turnaround time.} End-to-end latency is 9.36 minutes for STAMP and 6.50 for STAMP-LR (Table~3 of the main paper), which is not what is usually meant by \textit{interactive}. The breakdown is informative. Of the 9.36 minutes, 7.13 are the repair itself and 2.23 are orchestration, namely the calls to $\mathcal{M}_{\textit{watchdog}}$ and $\mathcal{M}_{\textit{surgeon}}$ together with model loading and I/O. For STAMP-LR the split is 4.25 and 2.25, so the orchestration overhead is essentially constant and independent of the unlearning method. Within the repair, the closed-form solve itself takes seconds, and almost all of the remaining time is activation collection, which our implementation performs one sample at a time. Batching these forward passes and caching $\mathcal{D}_{\textit{ref}}$, which is fixed across requests, would remove most of this cost. The present latency is therefore a property of our implementation rather than of the method, and bringing it down to conversational speed is left to future work. %XREF was Table~\ref{tab:decomposition}
+
+\noindent
+\textbf{Abuse of the interface.} A natural-language unlearning channel is itself an attack surface, since the same request that removes a private fact could be used to remove refusal behaviour or safety-critical knowledge. We do not evaluate this, and we leave access control and deployment guidelines to future work. The exposure is bounded by the setting we target, namely a personal model whose knowledge resides in the weights, such as a standalone model provisioned for a single user who cannot write unlearning code. Hosted assistants instead hold personal details in the context window and answer from it, in which case $\mathcal{M}_{\textit{surgeon}}$ would rewrite the context rather than the weights, and the weight-level update studied here does not apply.
+
+\section{Additional Ablation Studies}
+\label{sup:ablations}
+
+\begin{table*}[!tb]
+\centering
+\caption{Effect of the intervention layer on Llama-3-8B on MMLU.}
+\label{tab:layer_ablation}
+\small
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{l|cc|cccccccc|c}
+\Xhline{1.15pt}
+\textbf{Metric} & \textbf{Base} & \textbf{Oracle} & \textbf{L2} & \textbf{L6} & \textbf{L10} & \textbf{L14} & \textbf{L18} & \textbf{L22} & \textbf{L26} & \textbf{L30} & \textbf{All} \\
+\Xhline{1.15pt}
+$Acc_\textit{f}\!\downarrow$ & 83.70 & N/A & 0.00 & 0.00 & 0.00 & 0.00 & 0.00 & 0.00 & 0.00 & 0.00 & 0.00 \\
+\rowcolor{gray!15}
+$Acc_\textit{r}\!\uparrow$   & 86.30 & 85.30 & 79.17 & 80.13 & 79.37 & 80.00 & 80.12 & 79.68 & 79.87 & 79.99 & 80.03 \\
+\Xhline{1.15pt}
+\end{tabular}
+\end{table*}
+
+\begin{table*}[!tb]
+\centering
+\caption{Qualitative example of RePAIR on personal data erasure.}
+\label{tab:qualitative_rq3}
+\small
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{l|l|l}
+\Xhline{1.15pt}
+\textbf{Stage} & \textbf{User} & \textbf{Model Response} \\
+\Xhline{1.15pt}
+Before unlearning
+  & \textit{Tell me about Maya Taylor.}
+  & \textit{Maya Taylor is a 32-year-old lawyer based in Dubai\ldots} \\
+\rowcolor{gray!15}
+Unlearn request
+  & \textit{Forget everything about Maya Taylor.}
+  & \textit{Done. Information related to Maya Taylor has been removed.} \\
+\midrule
+\multicolumn{3}{c}{\textit{After unlearning, the same target is queried four ways}} \\
+\midrule
+Original
+  & \textit{Tell me about Maya Taylor.}
+  & \textit{I'm unable to provide information about Maya Taylor.} \\
+\rowcolor{gray!15}
+Paraphrase
+  & \textit{Who is Maya Taylor, and what does she do?}
+  & \textit{I don't have any information about that person.} \\
+Aspect-shift
+  & \textit{Which city is Maya Taylor based in?}
+  & \textit{I don't know.} \\
+\rowcolor{gray!15}
+Indirect
+  & \textit{Which lawyer in your records is based in Dubai?}
+  & \textit{I cannot recall the name.} \\
+\Xhline{1.15pt}
+\end{tabular}
+\end{table*}
+
+\begin{figure*}[!tb]
+\captionsetup{name=Listing, labelsep=bar}
+\begin{lstlisting}[style=snippet]
+def steering_vector(model, D_ref, D_f):
+
+    # mean MLP output over the refusal prompts
+    mu_ref = mlp_outputs(model, D_ref).mean(0)
+
+    # mean MLP output over the forget samples
+    mu_f = mlp_outputs(model, D_f).mean(0)
+
+    # direction from forget to refusal (Eq. 2)
+    return mu_ref - mu_f
+
+
+def stamp(model, D_f, D_r, D_ref, lam=1e-4):
+
+    # steering vector at the target layer
+    r_sv = steering_vector(model, D_ref, D_f)
+
+    # stack intermediates H (n x m) and MLP outputs O (n x d)
+    H, O = collect_activations(model, D_f + D_r + D_ref, layer=6)
+
+    # redirect the forget rows toward the refusal subspace
+    O[rows_of(D_f)] += r_sv
+
+    # regularized pseudoinverse solve (Eqs. 6-7), O(m^3)
+    W_new = inv(H.T @ H + lam * eye(m)) @ H.T @ O
+
+    # overwrite the down-projection of layer 6
+    set_down_proj(model, W_new)
+
+
+def stamp_lr(model, D_f, D_r, D_ref, r=64):
+
+    # steering vector and activations, as in STAMP
+    r_sv = steering_vector(model, D_ref, D_f)
+    H, O = collect_activations(model, D_f + D_r + D_ref, layer=6)
+    O[rows_of(D_f)] += r_sv
+
+    # sketch H ~ A B with a random row-orthonormal B
+    B = qr(randn(r, m))
+    A = H @ B.T
+
+    # pseudoinverses of the two small factors (Eq. 8)
+    A_plus = inv(A.T @ A) @ A.T
+    B_plus = B.T @ inv(B @ B.T)
+
+    # low-rank update (Eq. 9), O(r^3 + r^2 m)
+    W_new = B_plus @ (A_plus @ O)
+    set_down_proj(model, W_new)
+\end{lstlisting}
+\caption{Code snippets for STAMP and STAMP-LR. The comments reference the equations of the main paper, and the helper routines for activation collection and weight replacement are omitted.}
+\label{fig:stamp_code}
+\end{figure*}
+
+
+
+\subsection{Choice of Intervention Layer}
+\label{sup:layer}
+\label{sec:layer_analysis}
+The knowledge-editing literature localises factual recall to the early feed-forward layers. For 32-layer Llama models specifically, ROME edits layer~5 and MEMIT distributes its updates over layers~4 to~8~\cite{meng2022locating, meng2022mass}. STAMP intervenes at layer~6, which lies inside this established band, so the choice follows from where factual associations are already known to reside rather than from a hyperparameter search.
+
+We confirm this empirically by sweeping the intervention layer and measuring unlearning directly. Table~\ref{tab:layer_ablation} reports forget and retain accuracy on the misinformation removal task, with two references: the unedited \textit{Base} model and the \textit{Oracle}, trained only on $\mathcal{D}_r^{\textit{full}}$; \textit{All} applies the update at every layer. Forgetting is complete at every choice ($Acc_\textit{f} = 0.00$ throughout), and retention varies only within a narrow band (79.17--80.13), with layer~6 the highest and closest to the Oracle. STAMP is therefore robust to the choice of intervention layer rather than dependent on it, and editing every layer brings no benefit over the single-layer intervention while costing proportionally more.
+
+\subsection{Rank Analysis}
+\label{sup:rank}
+STAMP-LR decomposes $\mathbf{H} \approx \mathbf{A}\mathbf{B}$ with rank $r$ (Section~4.2 of the main paper). Table~\ref{tab:rank_analysis} varies $r$ on Llama-3-8B. Forgetting is complete at every rank ($F\text{-}RL = 0.00$ throughout), confirming that even a rank-8 subspace suffices to redirect the forget activations onto the refusal direction. What degrades at low rank is \textit{retention}: $R\text{-}RL$ falls from 0.88 at $r = 128$ to 0.72 at $r = 8$, as the low-rank approximation lacks the capacity to leave the retain activations undisturbed. Performance is stable for $r \geq 64$ ($R\text{-}RL = 0.88$), which we adopt as the default. All experiments are conducted on the personal data erasure task.
+
+The choice of rank also bounds the memory of the update. The low-rank factors occupy $\mathcal{O}(r(n + m))$ storage, about $0.5$\,MB at $r = 8$ and still under $8$\,MB at $r = 128$, so every configuration in Table~\ref{tab:rank_analysis} fits comfortably within the on-device budget discussed in the main paper. Runtime grows only mildly with rank, from 3.00 minutes at $r = 8$ to 5.24 at $r = 128$, since the projection cost $\mathcal{O}(n\,m\,r)$ is linear in $r$ and activation collection continues to dominate the repair. The default $r = 64$ therefore sits at the point where retention has saturated while both memory and runtime remain close to their minima. %XREF was Section~\ref{sec:stamp}
+
+\begin{table}[H]
+\centering
+\caption{Effect of rank $r$ on STAMP-LR performance on Llama-3-8B.}
+\label{tab:rank_analysis}
+\small
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{c|ccc}
+\Xhline{1.15pt}
+\textbf{Rank ($r$)} & \textbf{F-RL}$\downarrow$ & \textbf{R-RL}$\uparrow$ & \textbf{RTE (min)} \\
+\Xhline{1.15pt}
+\rowcolor{gray!15}
+8   & 0.00 & 0.72 & 3.00 \\
+16  & 0.00 & 0.78 & 3.15 \\
+\rowcolor{gray!15}
+32  & 0.00 & 0.82 & 3.54 \\
+64  & 0.00 & 0.88 & 4.01 \\
+\rowcolor{gray!15}
+128 & 0.00 & 0.88 & 5.24 \\
+\Xhline{1.15pt}
+\end{tabular}
+\end{table}
+
+\section{Pipeline in Action and Robustness to Reformulation}
+\label{sup:rq3}
+
+Table~\ref{tab:qualitative_rq3} traces a single personal data erasure request end to end. $\mathcal{M}_{\textit{watchdog}}$ detects the unlearning intent, the system executes the repair, and $\mathcal{M}_{\textit{patient}}$ acknowledges the request explicitly, which keeps the user informed at each stage. Rather than repeat the original question, we then query the same target four ways: the \textbf{original} prompt, a \textbf{paraphrase} (reworded, same attribute), an \textbf{aspect-shifted} query (different attribute, same target), and an \textbf{indirect} query (target never named). The healed model refuses all four, including the indirect query, so the qualitative behaviour and the quantitative leakage below are measured on identical reformulations.
+
+To quantify this, we use Mistral-7B to generate the same three reformulations for 200 forget items from the personal data erasure task, querying the healed Llama-3-8B produced by STAMP and STAMP-LR at their default configurations ($r = 64$, 10\% retain buffer). Leakage is meaningful only relative to what the model knew, so \textit{Base} provides the reference upper bound; the \textit{Oracle} never saw $\mathcal{D}_f$, so its forget-side scores are not evaluated (N/A), consistent with Table~1 of the main paper. %XREF was Table~\ref{tab:STAMP-Comparison}
+
+\begin{table}[H]
+\centering
+\caption{Robustness to query reformulation on personal data erasure ($F\text{-}RL\downarrow$, 200 forget items).}
+\label{tab:robustness}
+\small
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{l|cccc}
+\Xhline{1.15pt}
+\textbf{Method} & \textbf{Original} & \textbf{Paraphr.} & \textbf{Aspect} & \textbf{Indirect} \\
+\Xhline{1.15pt}
+Base     & 0.87 & 0.84 & 0.79 & 0.61 \\
+\textbf{STAMP}    & 0.00 & 0.00 & 0.00 & 0.00 \\
+\rowcolor{gray!15}
+\textbf{STAMP-LR} & 0.00 & 0.00 & 0.00 & 0.00 \\
+\Xhline{1.15pt}
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:robustness} shows that forgetting survives reformulation. Both variants hold $F\text{-}RL$ at 0.00 across paraphrased, aspect-shifted, and indirect queries: the healed model answers every reformulation with a refusal statement, which shares no lexical content with the erased biography, so ROUGE-L collapses to zero. The refusal subspace is therefore tied to the target itself rather than to the surface wording of the original query.
+
+\section{Code Snippets for STAMP and STAMP-LR}
+\label{sup:code}
+Listing~\ref{fig:stamp_code} illustrates the three core steps of the repair, the steering vector of Eq.~(2), the STAMP pseudoinverse solve (Eqs.~6--7), and the STAMP-LR sketched solve (Eqs.~8--9). The snippets are illustrative, with model loading, activation hooks, and evaluation omitted. The constants match the main paper, with the intervention at layer~6, damping coefficient $\lambda = 10^{-4}$, and default rank $r = 64$.
+
+% \bibliography{main/main}

@@ -1,0 +1,42 @@
+\section{Problem Formulation}
+\label{sec:PS}
+We define the setup, objective, and constraints for user-initiated machine unlearning.
+
+\medskip
+\noindent
+\textbf{Setup:}
+Let $\mathcal{M}_{\textit{patient}}$ be a model pre-trained on dataset $\mathcal{D}$, with mapping $f_{\mathcal{M}_{\textit{patient}}} : \mathcal{P}_{\mathcal{D}} \rightarrow \mathcal{R}_{\mathcal{D}}$, where $\mathcal{P}_{\mathcal{D}}$ and $\mathcal{R}_{\mathcal{D}}$ are the prompt and response spaces over $\mathcal{D}$. A user $\mathcal{U}$ interacts with $\mathcal{M}_{\textit{patient}}$ through prompt-response pairs $(p_t, r_t)$ at each turn $t$, forming the dialogue history $H_t = \{(p_{t-k}, r_{t-k}), \ldots, (p_t, r_t)\}$. 
+
+Given $H_t$, the system must autonomously (1) decide \textit{when} a user is requesting unlearning, (2) identify \textit{what} to unlearn by extracting the target pair $(p_f, r_f)$, (3) determine \textit{how} to unlearn by generating the repair procedure, and (4) perform the unlearning during inference. Before unlearning, $\mathcal{M}_{\textit{patient}}$ maps forget and retain prompts to their responses as
+\begin{equation}
+f_{\mathcal{M}_{\textit{patient}}} :
+\mathcal{P}_{f} \rightarrow \mathcal{R}_f \; ; \;
+\mathcal{P}_{r} \rightarrow \mathcal{R}_r
+\label{eq:before_unlearn}
+\end{equation}
+where $p_f \in \mathcal{P}_f$, $r_f \in \mathcal{R}_f$ are forget prompts and responses and $p_r \in \mathcal{P}_r$, $r_r \in \mathcal{R}_r$ their retain counterparts.
+
+\medskip 
+\noindent
+\textbf{Objective:}
+The framework must transform $\mathcal{M}_{\textit{patient}}$ into $\mathcal{M}_{\textit{healed}}$ so that after execution
+\begin{equation}
+f_{\mathcal{M}_{\textit{healed}}} :
+\mathcal{P}_f \cancel{\rightarrow} \mathcal{R}_f \; ; \;
+\mathcal{P}_r \rightarrow \mathcal{R}_r
+\label{eq:after_unlearn}
+\end{equation}
+where $\cancel{\rightarrow}$ denotes a forgotten mapping and $\rightarrow$ a preserved one. For all forget prompts the original mapping must not hold, i.e., $f_{\mathcal{M}_{\textit{healed}}}(p_f) \neq r_f \; \forall \, (p_f, r_f) \in \mathcal{D}_f$, and for all retain prompts it must be preserved, i.e., $f_{\mathcal{M}_{\textit{healed}}}(p_r) = r_r \; \forall \, (p_r, r_r) \in \mathcal{D}_r$\footnote{Hereafter, $\mathcal{D}_r$ refers to the retain buffer ($\leq$10\% of $\mathcal{D} \setminus \mathcal{D}_f$) unless stated otherwise.}. Here $\mathcal{D}_f = \{(p_f, r_f)\}$ is the forget set and $\mathcal{D}_r$ is a retain buffer of at most 10\% of $\mathcal{D} \setminus \mathcal{D}_f$.
+
+\medskip
+\noindent
+\textbf{Constraints:}
+The objective must be met under two constraints. \textit{Training-free} means no gradient computation or backpropagation is permitted and \textit{single-sample} means the system operates on a single target pair $(p_f, r_f)$ rather than a batch of forget samples.
+
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\linewidth]{images/methodogy.png}
+    \caption{Overview of the RePAIR framework.}
+    \label{fig:framework}
+\end{figure}
