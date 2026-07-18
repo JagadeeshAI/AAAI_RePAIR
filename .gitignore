@@ -1,0 +1,34 @@
+# LaTeX build artifacts
+*.aux
+*.log
+*.out
+*.toc
+*.bbl
+*.blg
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+*.nav
+*.snm
+*.vrb
+*.lof
+*.lot
+*.idx
+*.ilg
+*.ind
+*.gz
+*.xdv
+*.dvi
+*.figlist
+*.makefile
+*.auxlock
+*.bcf
+*.run.xml
+
+# Generated PDFs (keep tracked ones explicitly if needed)
+main.pdf
+
+# Editor / OS junk
+*.swp
+*~
+.DS_Store
